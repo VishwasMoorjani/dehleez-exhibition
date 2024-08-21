@@ -1,0 +1,151 @@
+.demo-icon.customBgColor {
+    background: #de302f;
+}
+.gallery .carousel-item {
+    height: 500px;
+}
+.gallery .carousel-item img {
+    height: 500px;
+}
+.gallery .carousel-item:before {
+    position: absolute;
+    content: '';
+    width: 100%;
+    background: #00000085;
+    height: 500px;
+}
+input.btn {
+    width: 100%;
+}
+.owl-pagination {
+    display: block;
+}
+#banner .owl-controls.clickable {
+    display: none !important;
+}
+.carousel-indicators.spons {
+    bottom: -52px;
+}
+.carousel.slide.sponsor {
+    overflow: unset;
+}
+.carousel-indicators.spons [data-bs-target] {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+	opacity: 1;
+	background-color: #adadad;
+}
+.carousel-indicators.spons .active {
+    opacity: 1;
+    background-color: #de302f;
+}
+.testimonial .item {
+    width: 47%;
+    float: left;
+    border: 1px solid #b5b5b5;
+    margin: 0 12px;
+    padding: 3% 3%;
+}
+.sponsors_logo {
+    border: 1px solid #c7c7c7;
+    padding: 20% 0;
+    height: 150px;
+    text-align: center;
+}
+.carousel-item.west {
+    height: 600px;
+}
+.banner-content.banner-tagline {
+    width: 50%;
+    text-align: left;
+}
+.banner-content h1 {
+    font-size: 80px;
+}
+video.video {
+    top: unset;
+    bottom: 1px;
+}
+
+.logo {
+    text-align: left;
+}
+
+.event_priceing:hover {
+    border-color: #de2f2f;
+}
+textarea.form-control {
+    height: auto;
+}
+button.btn.btn-block {
+    width: 100%;
+}
+nav.navbar.navbar-expand-lg {
+    float: right;
+}
+#menu-footer-menu li {
+    position: relative;
+}
+#menu-footer-menu li a::after {
+    left: 0px;
+}
+.event_inner {
+    position: relative;
+}
+.fav {
+    position: relative;
+}
+a.btn.btn-lg.btn-danger.btn-block {
+    width: 100%;
+}
+li.event_status {
+    position: relative;
+}
+.event_status::after {
+    top: 21px;
+    left: 12px;
+}
+#banner .owl-pagination {
+    display: none;
+}
+
+
+
+@media only screen and (max-width: 479px) {
+nav.navbar.navbar-expand-lg {
+    float: unset;
+}
+.navbar-nav {
+    margin-right: 0;
+}
+.copyright-text {
+    text-align: center;
+}
+.newslette-iframe, .subscribe-newsletter {
+    height: auto;
+}
+.pagination-lg .page-link {
+    padding: 5px 20px;
+}
+.modal-dialog {
+    width: 90%;
+    margin: 15px auto;
+}
+html {
+    overflow-x: hidden;
+}
+.form-group label {
+    background: transparent !important;
+}
+.gallery_style3 img {
+    width: 100%;
+    height: auto !important;
+}
+
+}
+
+
+.article_tag {
+    padding: 25px 8px;
+}

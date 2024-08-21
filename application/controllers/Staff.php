@@ -1,0 +1,1971 @@
+<?php
+defined('BASEPATH') or exit('No direct script access allowed');
+
+class Staff extends CI_Controller
+{
+	function __construct()
+	{
+		parent::__construct();
+
+		// Load form validation ibrary & user model 
+		$this->load->library('form_validation');
+		$this->load->model('Staff_model');
+		$this->load->model('Blog_model');
+		$this->load->model('Staff_model');
+		$this->load->model('Product_model');
+		$this->load->model('User_model');
+		$this->load->model('Admin_model');
+		$this->load->model('Order_model');
+
+		// Staff login status 
+		$this->isStaffLoggedIn = $this->session->userdata('isStaffLoggedIn');
+		$this->Global = $this->Global_model->getdata();
+		if (isset($_SESSION['user_role'])) {
+			$permis = $this->db->get_where('roles', array('role_name' => $this->session->userdata('user_role')))->row_array();
+			$this->Global['permissions'] = explode(',', $permis['permissions']);
+		}
+		$this->load->helper(array('form', 'url'));
+	}
+
+	public function index()
+	{
+		if (isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/dashboard');
+		} else {
+			redirect('staff/login');
+		}
+	}
+
+	public function dashboard()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('dashboard', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				// $products = $this->db->query("Select * from product");
+				// $this->Global['totalproducts'] = $products->num_rows();
+				// $this->Global['products'] = $this->Staff_model->getproducts();
+				// $totalcategory = $this->db->query("Select * from category where parent = ''");
+				// $this->Global['totalcategory'] = $totalcategory->num_rows();
+				// $totalcars = $this->db->query("Select * from car");
+				// $this->Global['totalcars'] = $totalcars->num_rows();
+				// $totalcar_category = $this->db->query("Select * from car_category");
+				// $this->Global['totalcar_category'] = $totalcar_category->num_rows();
+				// $totalfarms = $this->db->query("Select * from farm");
+				// $this->Global['totalfarms'] = $totalfarms->num_rows();
+				// $totalfarm_category = $this->db->query("Select * from farm_category");
+				// $this->Global['totalfarm_category'] = $totalfarm_category->num_rows();
+				$this->load->view('staff/dashboard', $this->Global);
+			}
+		}
+	}
+
+	public function customers()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('customers', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->Global['customers'] = $this->User_model->getalluser();
+				// echo "<pre>";
+				// print_r($this->Global['customers']);
+				// die();
+				$this->load->view('staff/customer', $this->Global);
+			}
+		}
+	}
+
+	public function order_history($req)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('order_history', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->Global['exhibitions'] = $this->Product_model->getexhibitions();
+				$this->Global['orders'] = $this->Staff_model->getorders($req);
+				// echo "<pre>";
+				// print_r($this->Global['orders']);
+				// die();
+				// $this->Global['account'] = $this->User_model->getdata($_SESSION['userId']);
+				$this->load->view('staff/userorder', $this->Global);
+			}
+		}
+	}
+
+	public function login()
+	{
+		if (isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/dashboard');
+		} else {
+			$this->Global = array();
+			// If login request submitted 
+			if (isset($_POST['loginSubmit'])) {
+				$this->form_validation->set_rules('email', 'Email', 'required|valid_email');
+				$this->form_validation->set_rules('password', 'password', 'required');
+
+				if ($this->form_validation->run() == true) {
+					$con = array(
+						'returnType' => 'single',
+						'conditions' => array(
+							'email' => $this->input->post('email'),
+							'password' => sha1($this->input->post('password')),
+						)
+					);
+					$checkLogin = $this->Staff_model->getRows($con);
+					if ($checkLogin) {
+						$this->session->set_userdata('isStaffLoggedIn', TRUE);
+						$this->session->set_userdata('userId', $checkLogin['id']);
+						$this->session->set_userdata('staffEmail', $checkLogin['email']);
+						$this->session->set_userdata('user_role', $checkLogin['role']);
+						$this->session->set_userdata('staffName', $checkLogin['name']);
+						redirect('staff/dashboard/');
+					} else {
+						$this->session->set_flashdata('error_msg', ' Wrong email or password, please try again.');
+					}
+				} else {
+					$this->session->set_flashdata('error_msg', ' Please fill all the mandatory fields.');
+				}
+			}
+
+			// Load view 
+			$this->load->view('staff/sign-in', $this->Global);
+		}
+	}
+	public function logout()
+	{
+		$this->session->unset_userdata('isStaffLoggedIn');
+		$this->session->unset_userdata('userId');
+		$this->session->sess_destroy();
+		redirect('staff/login');
+	}
+	public function forgot_password()
+	{
+		if (isset($_POST['email'])) {
+			$email = $this->input->post('email');
+			$findemail = $this->Staff_model->ForgotPassword($email);
+			if ($findemail) {
+				$this->Staff_model->sendpassword($findemail);
+			} else {
+				$this->session->set_flashdata('error_msg', ' Email not found!');
+				redirect(base_url() . 'staff/login', 'refresh');
+			}
+		}
+		$this->load->view('staff/forgot');
+	}
+
+	public function upload($file, $dir = 'images')
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			$config['upload_path']          = FCPATH . 'assets/front/' . $dir;
+			$config['allowed_types']        = '*';
+
+			$this->load->library('upload', $config);
+
+			$this->upload->initialize($config);
+			if (!$this->upload->do_upload($file)) {
+				$data['error_message'] =  $this->upload->display_errors();
+				$this->session->set_flashdata('error_msg', $data['error_message']);
+				redirect($_SERVER['HTTP_REFERER']);
+			} else {
+				return $this->upload->data();
+			}
+		}
+	}
+
+	public function create_slug($name, $table, $field)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			// Use this code to create a slug
+			// $title = "My name is Vishwas Moorjani";
+			// $table = "product";
+			// $field = "link";
+			// $a =  $this->create_slug($title, $table, $field);
+
+			$slug = $name;
+			$slug = url_title($name);
+			$key = NULL;
+			$value = NULL;
+			$i = 0;
+			$params = array();
+			$params[$field] = $slug;
+
+			if ($key) $params["$key !="] = $value;
+
+			while ($this->db->from($table)->where($params)->get()->num_rows()) {
+				if (!preg_match('/-{1}[0-9]+$/', $slug))
+					$slug .= '-' . ++$i;
+				else
+					$slug = preg_replace('/[0-9]+$/', ++$i, $slug);
+				$params[$field] = $slug;
+			}
+
+			return strtolower($slug);
+		}
+	}
+
+	public function activate($table = NULL, $link = NULL)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			$this->load->model('Product_model');
+			$this->Product_model->activate($table, $link);
+			redirect($_SERVER['HTTP_REFERER']);
+		}
+	}
+
+	public function deactivate($table = NULL, $link = NULL)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			$this->load->model('Product_model');
+			$this->Product_model->deactivate($table, $link);
+			redirect($_SERVER['HTTP_REFERER']);
+		}
+	}
+
+	public function delete($table = NULL, $link = NULL)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('delete', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->load->model('Product_model');
+				$this->Product_model->delete($table, $link);
+				redirect($_SERVER['HTTP_REFERER']);
+			}
+		}
+	}
+	public function cancelofflinebookings($table = NULL, $link = NULL)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			$this->load->model('Product_model');
+			$this->Global['stalls'] = $this->Product_model->getstall($link);
+			$this->Global['exhibitions'] = $this->Product_model->get_exhibition_by_id($this->Global['stalls']['exhibition_id']);
+			$remark = "Stall Number " . $this->Global['stalls']['stall_number'] . " of Exhibition " . $this->Global['exhibitions']->name . " has been cancelled from offline bookings by ".$_SESSION['staffEmail'];
+
+			$this->Product_model->cancelofflinebookings($_SESSION['staffEmail'], $remark);
+			$this->Product_model->delete($table, $link);
+			redirect($_SERVER['HTTP_REFERER']);
+		}
+	}
+
+	public function exhibitionlog($table = NULL,$id = NULL)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			$this->load->model('Product_model');
+			$this->Global['exhibitions'] = $this->Product_model->get_exhibition($id);
+			print_r($this->Global['exhibitions']->name);
+			$remark = $this->Global['exhibitions']->name ." Exhibition has been deleted by ".$_SESSION['staffEmail'];
+			$this->Product_model->cancelofflinebookings($_SESSION['staffEmail'], $remark);
+			$this->Product_model->delete($table, $id);
+			redirect($_SERVER['HTTP_REFERER']);
+		}
+	}
+
+	public function stallog($table = NULL,$id = NULL)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			$this->load->model('Product_model');
+			$this->Global['stalls'] = $this->Product_model->get_stall_by_link($id);
+			$remark = $this->Global['stalls']->name ." Stall has been deleted by ".$_SESSION['staffEmail'];
+			// print_r($this->Global['stalls']);
+			// echo $remark;
+			// die();
+			$this->Product_model->cancelofflinebookings($_SESSION['staffEmail'], $remark);
+			$this->Product_model->delete($table, $id);
+			redirect($_SERVER['HTTP_REFERER']);
+		}
+	}
+
+	public function globalsettings()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('globalsettings', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->load->view('staff/globalsettings', $this->Global);
+			}
+		}
+	}
+
+	public function editsettings()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (isset($_POST['submit'])) {
+				$name = $_POST['name'];
+				$value = $_POST['value'];
+				$this->Global_model->editsettings($name, $value);
+			}
+			redirect('staff/globalsettings');
+		}
+	}
+
+	public function change_password()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			$this->load->view('staff/change-password');
+		}
+	}
+
+	function dragDropUploadGallery()
+	{
+		if (!empty($_FILES)) {
+			// File upload configuration 
+			$config['upload_path']          = FCPATH . 'assets/front/images/';
+			$config['allowed_types']        = 'gif|jpg|png|jpeg|webp|svg';
+
+			// Load and initialize upload library 
+			$this->load->library('upload', $config);
+			$this->upload->initialize($config);
+
+			// Upload file to the server 
+			if ($this->upload->do_upload('file')) {
+				$configer =  array(
+					'image_library' => 'gd2',
+					'source_image'  =>  $this->upload->data()['full_path'],
+					'maintain_ratio' =>  TRUE,
+					'height'       =>  '1100',
+					'new_image' => $this->upload->data()['full_path'],
+				);
+				$this->load->library('image_lib', $configer);
+				$a = $this->image_lib->resize();
+				if ($a == 1) {
+					$fileData = $this->upload->data();
+				}
+				$fileData = $this->upload->data();
+				$this->load->model('Global_model');
+				$data['images'] = $this->Global_model->getgalleryimage();
+				$images = $this->Global_model->savegalleryimages($fileData['file_name']);
+			}
+		}
+	}
+
+	function dragDropUpload($link)
+	{
+		if (!empty($_FILES)) {
+			// File upload configuration 
+			$config['upload_path']          = FCPATH . 'assets/front/images/';
+			$config['allowed_types']        = 'gif|jpg|png|jpeg|webp|svg';
+
+			// Load and initialize upload library 
+			$this->load->library('upload', $config);
+			$this->upload->initialize($config);
+
+			// Upload file to the server 
+			if ($this->upload->do_upload('file')) {
+				$configer =  array(
+					'image_library' => 'gd2',
+					'source_image'  =>  $this->upload->data()['full_path'],
+					'maintain_ratio' =>  TRUE,
+					'height'       =>  '1100',
+					'new_image' => $this->upload->data()['full_path'],
+				);
+				$this->load->library('image_lib', $configer);
+				$a = $this->image_lib->resize();
+				if ($a == 1) {
+					$fileData = $this->upload->data();
+				}
+				$fileData = $this->upload->data();
+				$this->load->model('Product_model');
+				$images = $this->Product_model->getimages($link);
+				$target_value = $fileData['file_name'];
+				if ($images->images == "[]") {
+					$a = trim($images->images, "]") . json_encode($target_value) . "]";
+				} else {
+					$a = (trim($images->images, "]") . "," . json_encode($target_value)) . "]";
+				}
+				$insert = $this->Product_model->saveimage($link, $a);
+			}
+		}
+	}
+
+	public function gallerys()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('gallerys', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->Global['sliders'] = $this->Global_model->getgallery();
+				$this->load->view('staff/add-gallery-drag', $this->Global);
+			}
+		}
+	}
+
+	public function removegalleryimages($link, $id)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			$a = unlink(FCPATH . 'assets/front/images/' . $link);
+			$this->load->model('Global_model');
+			$this->Global_model->removegalleryimages($id);
+			redirect($_SERVER['HTTP_REFERER']);
+		}
+	}
+
+	public function addimages($link)
+	{
+		if (!empty($_FILES)) {
+			$config['upload_path']          = FCPATH . 'assets/front/images/';
+			$config['allowed_types']        = 'gif|jpg|png|jpeg|webp|svg';
+			$this->load->library('upload', $config);
+			$this->upload->initialize($config);
+			if ($this->upload->do_upload('file')) {
+				$fileData = $this->upload->data();
+				$this->load->model('Product_model');
+				$images = $this->Product_model->getimages($link);
+				$target_value = $fileData['file_name'];
+				if ($images->images == "[]") {
+					$a = trim($images->images, "]") . json_encode($target_value) . "]";
+				} else {
+					$a = (trim($images->images, "]") . "," . json_encode($target_value)) . "]";
+				}
+				$insert = $this->Product_model->saveimage($link, $a);
+			}
+		}
+		$this->load->model('Product_model');
+		$result = $this->Product_model->getimages($link);
+		$this->Global['link'] = $link;
+		$this->Global['images'] = json_decode($result->images, true);
+		$this->Global['exhinition'] = $this->Product_model->get_exhibition($link);
+		$this->Global['title'] = $this->Global['exhinition']->name." (".$this->Global['exhinition']->start_date." - ".$this->Global['exhinition']->end_date.")";
+		$this->load->view('staff/images', $this->Global);
+	}
+
+	public function removeimage($link = NULL, $row = NULL)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			$this->load->model('Product_model');
+			$images = $this->Product_model->getimages($link);
+			$target_value = $row;
+			$a = "";
+			$array = (json_decode($images->images));
+			foreach ($array as $key => $value) {
+				if ($value == $target_value) {
+					unset($array[$key]);
+				} else {
+					$a = $a . json_encode($value) . ",";
+				}
+			}
+			$a = "[" . (trim($a, ",")) . "]";
+			$this->Product_model->saveimage($link, $a);
+			redirect($_SERVER['HTTP_REFERER']);
+		}
+	}
+
+	public function blogs()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('blogs', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->Global['blogs'] = $this->Blog_model->getblogs();
+				$this->load->view('staff/blogs', $this->Global);
+			}
+		}
+	}
+
+	public function addblog()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('addblog', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				if (isset($_POST['submit'])) {
+					$data = $_POST;
+					$title = $_POST['post_title'];
+					$table = "blog";
+					$field = "link";
+					$data['link'] =  $this->create_slug($title, $table, $field);
+
+					$image = $this->upload('image', 'images');
+					$data['image'] = $image['file_name'];
+					unset($data["submit"]);
+					$this->Staff_model->addblog($data);
+				}
+				// $this->Global['categories'] = $this->Product_model->getmaincategories();
+				$this->load->view('staff/add-blog', $this->Global);
+			}
+		}
+	}
+
+	public function editblog($slug)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('editblog', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				if (isset($_POST['submit'])) {
+					$data = $_POST;
+					if (!empty($_FILES['image']['name'])) {
+						$image = $this->upload('image', 'images');
+						$data['image'] = $image['file_name'];
+					}
+					unset($data["submit"]);
+					$this->Staff_model->editpost($slug, $data);
+				}
+				$blog = $this->Blog_model->getblogs('id', $slug);
+				$this->Global['blog'] = $blog[0];
+				// $this->Global['categories'] = $this->Product_model->getmaincategories();
+				$this->load->view('staff/edit-blog', $this->Global);
+			}
+		}
+	}
+
+	public function removeblog($link = NULL)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+
+			$this->Blog_model->removeimg('blog', 'image', 'link', $link);
+			echo ("done");
+		}
+	}
+
+	public function removeimg($link = NULL)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+
+			$this->Blog_model->removeimg('exhibition', 'image', 'link', $link);
+			echo ("done");
+		}
+	}
+	public function removefeatured_image($link = NULL)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+
+			$this->Blog_model->removeimg('exhibition', 'featured_image', 'link', $link);
+			echo ("done");
+		}
+	}
+
+	public function categories()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			$this->load->model('Product_model');
+			$this->Global['categories'] = $this->Product_model->getmaincategories();
+			$this->Global['title'] = "Categories";
+			$this->load->view('staff/category', $this->Global);
+		}
+	}
+
+	public function addcategory()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (isset($_POST['submit'])) {
+
+				$title = $_POST['name'];
+				$table = "category";
+				$field = "link";
+				$slug =  $this->create_slug($title, $table, $field);
+				$data = $_POST;
+				$data['link'] = $slug;
+				unset($data["submit"]);
+				$this->load->model('Product_model');
+				$this->Staff_model->addcategory($data);
+			}
+			$this->load->model('Product_model');
+			$this->Global['categories'] = $this->Product_model->getmaincategories();
+			$this->load->view('staff/add-category', $this->Global);
+		}
+	}
+
+	public function editcategory($slug)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (isset($_POST['submit'])) {
+				$data = $_POST;
+				unset($data["submit"]);
+				$this->load->model('Product_model');
+				$this->Staff_model->editcategory($data);
+				redirect('staff/categories');
+			}
+			$this->load->model('Product_model');
+			$this->Global['categories'] = $this->Product_model->getmaincategories();
+			$category = $this->Product_model->get_category($slug);
+			$this->Global['cat'] = json_decode(json_encode($category), true);
+			$this->load->view('staff/edit-category', $this->Global);
+		}
+	}
+
+	public function form()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			$query = $this->db->query("Select * from form order by id desc");
+			$this->Global['contacts'] = $query->result_array();
+			$this->load->view('staff/contact', $this->Global);
+		}
+	}
+
+	public function contactdetails($req)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			$query = $this->db->query("Select * from form where id='$req'");
+			$this->Global['message'] = $query->row_array();
+			$this->load->view('staff/contact-details', $this->Global);
+		}
+	}
+
+	public function enquiry()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			$query = $this->db->query("Select * from enquiry order by id desc");
+			$this->Global['contacts'] = $query->result_array();
+			$this->load->view('staff/enquiry', $this->Global);
+		}
+	}
+
+	public function enquirydetails($req)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			$query = $this->db->query("Select * from enquiry where id='$req'");
+			$this->Global['message'] = $query->row_array();
+			$this->load->view('staff/enquiry-details', $this->Global);
+		}
+	}
+
+	public function stalls($link)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('stalls', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->load->model('Product_model');
+				$this->Global['exhinition'] = $this->Product_model->get_exhibition_by_id($link);
+			    $this->Global['title'] = $this->Global['exhinition']->name." (".$this->Global['exhinition']->start_date." - ".$this->Global['exhinition']->end_date.")";
+				$this->Global['stalls'] = $this->Product_model->getstalls($link);
+				// $this->Global['title'] = "Stalls";
+				$this->Global['link'] = $link;
+				$this->load->view('staff/stalls', $this->Global);
+			}
+		}
+	}
+	public function addstall($link)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('addstall', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				if (isset($_POST['submit'])) {
+
+					$title = $_POST['name'];
+					$table = "exhibition";
+					$field = "link";
+					$slug =  $this->create_slug($title, $table, $field);
+
+					$data = $_POST;
+					$data['exhibition'] = $link;
+					$data['link'] = $slug;
+					$data['stalls'] = json_encode($_POST['stalls']);
+
+					unset($data["submit"]);
+					$this->load->model('Product_model');
+					$remark = " Stall Name ".$title." has been created by ".$_SESSION['staffEmail'];
+					$this->Product_model->cancelofflinebookings($_SESSION['staffEmail'], $remark);
+					$this->Staff_model->addstall($data);
+				}
+				$this->load->model('Product_model');
+				$stalls = $this->Product_model->getstalls($link);
+				$seats = array();
+				foreach ($stalls as $stall) {
+					$seats = array_merge(json_decode($stall['stalls']), $seats);
+				}
+				$this->Global['exhinition'] = $this->Product_model->get_exhibition_by_id($link);
+			    $this->Global['title'] = $this->Global['exhinition']->name." (".$this->Global['exhinition']->start_date." - ".$this->Global['exhinition']->end_date.")";
+				$this->Global['stalls'] = array_diff(range(1, 100), $seats);
+				$this->Global['exhibitions'] = $this->Product_model->getexhibitions();
+				
+				$this->load->view('staff/add-stall', $this->Global);
+			}
+		}
+	}
+
+	public function editstall($slug)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('editstall', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				if (isset($_POST['submit'])) {
+					$data = $_POST;
+					$data['stalls'] = json_encode($_POST['stalls']);
+					unset($data["submit"]);
+					$this->load->model('Staff_model');
+					$remark = " Stall Name ".$data['name']." has been edited by ".$_SESSION['staffEmail'];
+					$this->Product_model->cancelofflinebookings($_SESSION['staffEmail'], $remark);
+					$this->Staff_model->editstall($data);
+					redirect('staff/exhibitions');
+				}
+				$this->load->model('Product_model');
+				$this->Global['exhibitions'] = $this->Product_model->getexhibitions();
+				$this->Global['stall'] = $this->Product_model->get_stall($slug);
+				$this->Global['bookedstalls'] = $this->Staff_model->getallorders($slug);
+				// echo "<pre>";
+				// print_r($this->Global['bookedstalls']);
+				// die();
+
+				$stalls = $this->Product_model->getstalls($this->Global['stall']->exhibition);
+				$seats = array();
+				foreach ($stalls as $stall) {
+					$seats = array_merge(json_decode($stall['stalls']), $seats);
+				}
+				$this->Global['stalls'] = array_diff(range(1, 100), $seats);
+
+				$this->Global['stalls'] = array_merge(json_decode($this->Global['stall']->stalls), $this->Global['stalls']);
+				// $this->Global['cat'] = json_decode(json_encode($exhibition), true);
+				$this->load->view('staff/edit-stall', $this->Global);
+			}
+		}
+	}
+	// done
+	public function exhibitions()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('exhibitions', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->load->model('Product_model');
+				$this->Global['exhibitions'] = $this->Product_model->getexhibitions();
+				$this->Global['title'] = "Exhibitions";
+				$this->load->view('staff/exhibitions', $this->Global);
+			}
+		}
+	}
+
+	public function addexhibition()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('addexhibition', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				if (isset($_POST['submit'])) {
+
+					$title = $_POST['name'];
+					$table = "exhibition";
+					$field = "link";
+					$slug =  $this->create_slug($title, $table, $field);
+					if ($_POST['featured'] != "on") {
+						$_POST['featured'] = NULL;
+					}
+					$data = $_POST;
+					$data['link'] = $slug;
+					$image = $this->upload('image', 'images');
+					$data['image'] = $image['file_name'];
+
+					$featured_image = $this->upload('featured_image', 'images');
+					$data['featured_image'] = $featured_image['file_name'];
+
+					unset($data["submit"]);
+					$this->load->model('Product_model');
+
+					$remark = $title . " Exhibition  has been created by ".$_SESSION['staffEmail'];
+					$this->Product_model->cancelofflinebookings($_SESSION['staffEmail'], $remark);
+
+					$this->Staff_model->addexhibition($data);
+				}
+				$this->load->model('Product_model');
+				$this->load->view('staff/add-exhibition', $this->Global);
+			}
+		}
+	}
+
+	public function editexhibition($slug)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('editexhibition', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				if (isset($_POST['submit'])) {
+					if ($_POST['featured'] != "on") {
+						$_POST['featured'] = NULL;
+					}
+					$data = $_POST;
+					if (!empty($_FILES['image']['name'])) {
+						$image = $this->upload('image', 'images');
+						$data['image'] = $image['file_name'];
+					}
+					if (!empty($_FILES['featured_image']['name'])) {
+						$featured_image = $this->upload('featured_image', 'images');
+						$data['featured_image'] = $featured_image['file_name'];
+					}
+					unset($data["submit"]);
+					$this->load->model('Product_model');
+					$remark = $_POST['name'] . " Exhibition  has been edited by ".$_SESSION['staffEmail'];
+					$this->Product_model->cancelofflinebookings($_SESSION['staffEmail'], $remark);
+					$this->Staff_model->editexhibition($data);
+					redirect('staff/exhibitions');
+				}
+				$this->load->model('Product_model');
+				$this->Global['exhibitions'] = $this->Product_model->getexhibitions();
+				$exhibition = $this->Product_model->get_exhibition($slug);
+				$this->Global['cat'] = json_decode(json_encode($exhibition), true);
+				$this->load->view('staff/edit-exhibition', $this->Global);
+			}
+		}
+	}
+
+	public function vgallery()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('vgallery', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->Global['sliders'] = $this->Global_model->getvideogallery();
+				$this->load->view('staff/vgallery', $this->Global);
+			}
+		}
+	}
+
+	public function addvideogallery()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('addvideogallery', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				if (isset($_POST['submit'])) {
+					$title = rand(100, 10000);
+					$table = "slider";
+					$field = "link";
+					$slug =  $this->create_slug($title, $table, $field);
+					$this->Global = $_POST;
+					$this->Global['location'] = 'vgallery';
+					$this->Global['link'] = $slug;
+					//$image = $this->upload('image', '');
+					//$this->Global['image'] = $_POST['value'];
+					unset($this->Global["submit"]);
+					$this->Staff_model->addvideogallery($this->Global);
+				}
+				// $this->Global['sliders'] = $this->Global_model->getgallery();
+				$this->load->view('staff/add-gallery-video', $this->Global);
+			}
+		}
+	}
+
+	public function editvideogallery($link)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('editvideogallery', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				if (isset($_POST['submit'])) {
+					$this->Global = $_POST;
+					if (!empty($_FILES['image']['name'])) {
+						$image = $this->upload('image', '');
+						$this->Global['image'] = $image['file_name'];
+					}
+					unset($this->Global["submit"]);
+					$a = $this->Global_model->editvideogallery($this->Global);
+					redirect('staff/vgallery');
+				}
+				$slider = $this->Global_model->getgalleryvideo($link);
+				$this->Global['slider'] = $slider[0];
+				$this->load->view('staff/edit-video', $this->Global);
+			}
+		}
+	}
+
+	public function sliders()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('sliders', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->Global['sliders'] = $this->Global_model->getsliders();
+				$this->load->view('staff/sliders', $this->Global);
+			}
+		}
+	}
+
+	public function addsliders()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('addsliders', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				if (isset($_POST['submit'])) {
+					$title = rand(100, 10000);
+					$table = "slider";
+					$field = "link";
+					$slug =  $this->create_slug($title, $table, $field);
+					$data = $_POST;
+					$data['location'] = 'slider';
+					$data['link'] = $slug;
+					$image = $this->upload('image', 'images');
+					$data['image'] = $image['file_name'];
+					unset($data["submit"]);
+					$this->Global_model->addsliders($data);
+					redirect('staff/sliders');
+				}
+				$this->Global['sliders'] = $this->Global_model->getsliders();
+				$this->load->view('staff/add-sliders', $this->Global);
+			}
+		}
+	}
+
+	public function editslider($link)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('editslider', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				if (isset($_POST['submit'])) {
+					$data = $_POST;
+					$data['location'] = 'slider';
+					if (!empty($_FILES['image']['name'])) {
+						$image = $this->upload('image', 'images');
+						$data['image'] = $image['file_name'];
+					}
+					unset($data["submit"]);
+					$this->Global_model->editsliders($data);
+					redirect('staff/sliders');
+				}
+				$slider = $this->Global_model->getslider($link);
+				$this->Global['slider'] = $slider[0];
+				$this->load->view('staff/edit-slider', $this->Global);
+			}
+		}
+	}
+	public function removeslider($link = NULL)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			$this->Global_model->removeimg('slider', $link);
+			echo ("done");
+		}
+	}
+
+	public function addreview()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('addreview', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				if (isset($_POST['submit'])) {
+					$data = $_POST;
+					$image = $this->upload('image', 'images');
+					$data['image'] = $image['file_name'];
+					unset($data["submit"]);
+					$this->Staff_model->addreview($data);
+				}
+				$this->load->view('staff/add-review', $this->Global);
+			}
+		}
+	}
+
+	public function editreviews($slug)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('editreviews', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				if (isset($_POST['submit'])) {
+					$data = $_POST;
+					if (!empty($_FILES['image']['name'])) {
+						$image = $this->upload('image', 'images');
+						$data['image'] = $image['file_name'];
+					}
+					unset($data["submit"]);
+					$this->Staff_model->editreview($slug, $data);
+				}
+				$review = $this->Staff_model->getreviews('id', $slug);
+				$this->Global['review'] = $review[0];
+				$this->load->view('staff/edit-review', $this->Global);
+			}
+		}
+	}
+
+	public function removereviews($link = NULL)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			$this->load->model('Product_model');
+			$this->Product_model->removeimg('reviews', $link);
+			echo ("done");
+		}
+	}
+
+	public function reviews()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('reviews', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->Global['reviews'] = $this->Staff_model->getreviews();
+				$this->load->view('staff/reviews', $this->Global);
+			}
+		}
+	}
+
+	public function coupons()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('coupons', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->load->model('Product_model');
+				$this->Global['coupons'] = $this->Product_model->getcoupons();
+				$this->load->view('staff/coupons', $this->Global);
+			}
+		}
+	}
+
+	public function addcoupon()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('addcoupon', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				if (isset($_POST['submit'])) {
+					$this->form_validation->set_rules('name', 'Coupon Name', 'trim|required|is_unique[coupons.name]');
+					if ($this->form_validation->run() == true) {
+						$data = $_POST;
+						unset($data["submit"]);
+						$this->Staff_model->addcoupon($data);
+					}
+				}
+				$this->load->view('staff/add-coupon', $this->Global);
+			}
+		}
+	}
+
+	public function editcoupon($slug)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('editcoupon', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				if (isset($_POST['submit'])) {
+					$data = $_POST;
+					unset($data["submit"]);
+					$this->Staff_model->editcoupon($data);
+					redirect('staff/coupons');
+				}
+				$this->load->model('Product_model');
+				$this->Global['coupon'] = $this->Product_model->getcoupon($slug);
+				$this->load->view('staff/edit-coupon', $this->Global);
+			}
+		}
+	}
+
+	public function brands()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('brands', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->Global['sliders'] = $this->Global_model->getbrands();
+				$this->load->view('staff/brands', $this->Global);
+			}
+		}
+	}
+
+	public function addbrands()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('addbrands', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				if (isset($_POST['submit'])) {
+					$title = rand(100, 10000);
+					$table = "brands";
+					$field = "link";
+					$slug =  $this->create_slug($title, $table, $field);
+					$data = $_POST;
+					$data['link'] = $slug;
+					$image = $this->upload('image', 'images');
+					$data['image'] = $image['file_name'];
+					unset($data["submit"]);
+					$this->Staff_model->addbrands($data);
+				}
+				$this->load->view('staff/add-brand');
+			}
+		}
+	}
+
+	public function editbrand($slug)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('editbrand', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				if (isset($_POST['submit'])) {
+					$data = $_POST;
+					//$data['location'] = 'slider';
+					if (!empty($_FILES['image']['name'])) {
+						$image = $this->upload('image', 'images');
+						$data['image'] = $image['file_name'];
+					}
+					unset($data["submit"]);
+					$this->Staff_model->editbrand($data);
+				}
+				$brand = $this->Global_model->getbrand($slug);
+				$this->Global['slider'] = $brand[0];
+				$this->load->view('staff/edit-brand', $this->Global);
+			}
+		}
+	}
+
+	public function removebrand($link = NULL)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			$this->Global_model->removeimg('brands', $link);
+			echo ("done");
+		}
+	}
+
+	public function orders()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('orders', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->load->model('Staff_model');
+				$this->Global['orders'] = $this->Staff_model->getallbookedsatalls();
+				$this->Global['allexhibitions'] = $this->Product_model->getexhibitions();
+
+				// $data['orders'] = $this->Orders_model->getorders();
+				// $data['title'] = "All Order";
+				$this->load->view('staff/orders', $this->Global);
+			}
+		}
+	}
+
+	public function todaysorders()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('todaysorders', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->load->model('Orders_model');
+				$data['orders'] = $this->Orders_model->todaysorders();
+				$data['title'] = "Today's Order";
+				$this->load->view('staff/orders', $data);
+			}
+		}
+	}
+
+	public function pendingorders()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('pendingorders', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->load->model('Orders_model');
+				$field = "status";
+				$status = "Pending";
+				$data['orders'] = $this->Orders_model->getorders($field, $status);
+				$data['title'] = "Pending Order";
+				$this->load->view('staff/orders', $data);
+			}
+		}
+	}
+	public function confirmedorders()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('confirmedorders', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->load->model('Orders_model');
+				$field = "status";
+				$status = "Confirm";
+				$data['orders'] = $this->Orders_model->getorders($field, $status);
+				$data['title'] = "Confirm Order";
+				$this->load->view('staff/orders', $data);
+			}
+		}
+	}
+	public function dispatchorders()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('dispatchorders', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->load->model('Orders_model');
+				$field = "status";
+				$status = "Dispatch";
+				$data['orders'] = $this->Orders_model->getorders($field, $status);
+				$data['title'] = "Dispatch Order";
+				$this->load->view('staff/orders', $data);
+			}
+		}
+	}
+	public function transitorders()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('transitorders', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->load->model('Orders_model');
+				$field = "status";
+				$status = "Transit";
+				$data['orders'] = $this->Orders_model->getorders($field, $status);
+				$data['title'] = "Transit Order";
+				$this->load->view('staff/orders', $data);
+			}
+		}
+	}
+	public function deliveredorders()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('deliveredorders', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->load->model('Orders_model');
+				$field = "status";
+				$status = "Delivered";
+				$data['orders'] = $this->Orders_model->getorders($field, $status);
+				$data['title'] = "Delivered Order";
+				$this->load->view('staff/orders', $data);
+			}
+		}
+	}
+	public function cancelledorders()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('cancelledorders', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->load->model('Orders_model');
+				$field = "status";
+				$status = "Cancelled";
+				$data['orders'] = $this->Orders_model->getorders($field, $status);
+				$data['title'] = "Cancelled Order";
+				$this->load->view('staff/orders', $data);
+			}
+		}
+	}
+
+	public function orderdetails($orderid)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('orderdetails', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->load->model('Orders_model');
+				if (isset($_POST['order_id'])) {
+					$data = $_POST;
+					$this->Orders_model->change_status($data);
+					$order = $this->Orders_model->getorder($orderid)[0];
+					$data['toemail'] = $order['userEmail'];
+					$data['subject'] = $order['order_id'] . ' has been ' . $order['status'];
+					$mail_message = 'Dear ' . $order['userName'] . ',' . "<br/>";
+					$mail_message .= 'We would like to inform you that your order (' . $order['order_id'] . ') has been ' . $order['status'];
+					if ($order['status'] == 'Dispatch') {
+						$mail_message .= '<br/>The tracking id is <strong>' . $order['tracking_id'] . '</strong> <br/> The tracking url is ' . $order['tracking_url'];
+					}
+					$mail_message .= '<br/>Thanks & Regards';
+					$mail_message .= '<br/> ' . sitename;
+					$data['message'] = $mail_message;
+					$this->Staff_model->send_mail($data);
+				}
+				$data = $this->Global;
+				$data['items'] = $this->Orders_model->getitems($orderid);
+				$data['order'] = $this->Orders_model->getorder($orderid)[0];
+				$this->load->model('User_model');
+				//  $data['order']['shippingAddress'] = $this->User_model->getaddress($data['order']['shippingAddress']);
+				//  $data['order']['billingAddress'] = $this->User_model->getaddress($data['order']['billingAddress']);
+				$data['gst'] = $this->Global['gst'];
+				$result = $this->Global_model->seen("orders", $orderid);
+				$this->load->view('staff/orderdetails', $data);
+			}
+		}
+	}
+
+	public function offline()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('offline', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->Global['stalls'] = $this->Product_model->getofflinebookedstallsforstaff();
+
+				$this->Global['exhibitions'] = $this->Staff_model->offline_exhibition();
+				// echo "<pre>";
+				// print_r($this->Global['stalls']);
+				// die();
+				$this->load->view('staff/offline', $this->Global);
+			}
+		}
+	}
+
+	public function booked($req)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('booked', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->Global['customers'] = $this->User_model->getalluser();
+				$this->Global['allexhibitions'] = $this->Product_model->getexhibitions();
+				$this->Global['exhibitions'] = $this->Admin_model->booked($req);
+
+				$this->Global['exhibition'] = $this->Product_model->get_exhibition_by_id($req);
+				$this->Global['stalls'] = $this->Product_model->getstalls($this->Global['exhibition']->id);
+				$this->Global['bookedstalls'] = $this->Product_model->getbookedstalls($this->Global['exhibition']->id);
+			    $this->Global['title'] = $this->Global['exhibition']->name." (".$this->Global['exhibition']->start_date." - ".$this->Global['exhibition']->end_date.")";
+				
+				$this->load->view('staff/booked', $this->Global);
+			}
+		}
+	}
+
+	public function bookstalls()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('bookstalls', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				if (isset($_POST['submit'])) {
+					$data = $_POST;
+					// echo "<pre>";
+					// print_r($data['stall_number']);
+					// $final_data = array();
+					foreach ($data['stall_number'] as $value) {
+						// echo $value."<br>";
+						$final_data['booking_date'] = $data['booking_date'];
+						$final_data['booked_by'] = $data['booked_by'];
+						$final_data['exhibition_id'] =  $data['exhibition_id'];
+						$final_data['stall_id'] = $data['stall_id'];
+						$final_data['stall_number'] =  $value;
+						$final_data['remark'] = $data['remark'];
+
+						$this->Global['exhibitions'] = $this->Product_model->get_exhibition_by_id($data['exhibition_id']);
+						$remark = "Stall Number ".$final_data['stall_number']." of ".$this->Global['exhibitions']->name. " has been booked offlined by ".$_SESSION['staffEmail'];
+						$this->Product_model->walletlog($_SESSION['staffEmail'], $remark);
+
+						// print_r($final_data['stall_number']);
+						// print_r($final_data);
+						$this->Staff_model->addbookstalls($final_data);
+					}
+					redirect('staff/offline');
+					// echo "success";
+					// die();
+					// unset($data["submit"]);
+				}
+
+				$this->Global['exhibitions'] = $this->Staff_model->offline_exhibition();
+
+				// $this->load->model('Product_model');
+				// $this->Global['stalls'] = $this->Product_model->getstalls();
+				// $this->Global['title'] = "Stalls";
+				$this->load->view('staff/bookstall', $this->Global);
+			}
+		}
+	}
+
+	public function getstalls()
+	{
+		// if (!in_array('getstalls', $this->Global['permissions'])) {
+		// 	$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+		// 	redirect('staff/dashboard');
+		// } else {
+		$exhibition = $_POST["exhibition"];
+		$this->Global['stalls'] = $this->Product_model->getstalls($exhibition);
+		echo ('<option value="">Select Stalls</option>');
+		foreach ($this->Global['stalls'] as $stall) {
+			echo ('<option value="' . $stall['id'] . '">' . $stall['name'] . '</option>');
+		}
+		// }
+	}
+
+	public function getonestalls()
+	{
+		// if (!in_array('getonestalls', $this->Global['permissions'])) {
+		// 	$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+		// 	redirect('staff/dashboard');
+		// } else {
+		$stall = $_POST["stall"];
+		$this->Global['stallss'] = $this->Product_model->getonestalls($stall);
+		$this->Global['bookedstalls'] = $this->Product_model->getbookedstall($stall);
+		$final = array();
+		foreach ($this->Global['stallss'] as $stall) {
+			$data = array();
+			foreach ($this->Global['bookedstalls'] as $bookedstall) {
+				$data[] = $bookedstall['stall_number'];
+			}
+			$final = array_diff(json_decode($stall['stalls']), $data);
+		}
+		foreach ($final as $finals) {
+			echo ('<option value="' . $finals . '">' . $finals . '</option>');
+		}
+		// }
+	}
+
+	public function cancelorder($link)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('cancelorder', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->load->model('Product_model');
+				$order = $this->Product_model->getstall($link);
+				$query = $this->db->query("Select wallet from users where id = " . $order['user_id']);
+				$price = $query->row_array();
+				$finalprice = ((float)$price['wallet'] + (float)$order['wallet']);
+				$this->Product_model->updatewallet($order['user_id'], $finalprice);
+				$this->Product_model->canceltranscation($order['user_id'], ((float)$order['price'] - (float)$order['wallet']), $order['exhibition_id'], $order['stall_number'], ' is processed and will reach to your payment source soon.');
+				if ($order['wallet'] != 0) {
+					$this->Product_model->canceltranscation($order['user_id'], $order['wallet'], $order['exhibition_id'], $order['stall_number'], ' is credited to your wallet', 'Wallet');
+				}
+				
+				$this->Global['stalls'] = $this->Product_model->getstall($link);
+				$this->Global['exhibitions'] = $this->Product_model->get_exhibition_by_id($this->Global['stalls']['exhibition_id']);
+				$remark = "Stall Number " . $this->Global['stalls']['stall_number'] . " of Exhibition " . $this->Global['exhibitions']->name . " has been cancelled by ".$_SESSION['staffEmail'];
+				$this->Product_model->cancelofflinebookings($_SESSION['staffEmail'], $remark);
+				
+				$this->Product_model->cancelorder($link, $_SESSION['staffEmail']);
+				redirect($_SERVER['HTTP_REFERER']);
+			}
+		}
+	}
+
+	// public function cancelorder($link, $id, $wallet, $exhibition_id, $stall_number)
+	// {
+	// 	if (!isset($_SESSION['isStaffLoggedIn'])) {
+	// 		redirect('staff/login');
+	// 	} else {
+	// 		if (!in_array('cancelorder', $this->Global['permissions'])) {
+	// 			$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+	// 			redirect('staff/dashboard');
+	// 		} else {
+	// 			$this->load->model('Product_model');
+	// 			$this->Product_model->cancelorder($link);
+	// 			$query = $this->db->query("Select wallet from users where id = $id");
+	// 			$price = $query->row_array();
+	// 			// print_r($price);
+	// 			$finalprice = $price['wallet'] + $wallet;
+	// 			// print_r($wallet);
+	// 			// die();
+	// 			$this->Product_model->updatewallet($id, $finalprice);
+	// 			$this->Product_model->canceltranscation($id, $wallet, $exhibition_id, $stall_number);
+	// 			redirect($_SERVER['HTTP_REFERER']);
+	// 		}
+	// 	}
+	// }
+
+	public function profile($req)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('profile', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$this->Global['transcations'] = $this->Order_model->get_transactions_by_id($req);
+				$this->Global['account'] = $this->User_model->getdata($req);
+
+				$this->Global['exhibitions'] = $this->Product_model->getexhibitions();
+				$this->Global['orders'] = $this->Admin_model->getorders($req);
+				$this->Global['users'] = $this->User_model->getdata($req);
+				$this->load->view('staff/profile', $this->Global);
+			}
+		}
+	}
+
+
+	public function bookstallsforuser($link)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('bookstallsforuser', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+
+				if (isset($_POST['submit'])) {
+					$data = $_POST;
+					// echo "<pre>";
+					// print_r($_POST);
+					// die();
+					// $final_data = array();
+					$a = count($data['stall_number']);
+					$wallet = '';
+					if (isset($_POST['isChecked'])) {
+						$wallet = $_POST['wallet_deduction'] / $a;
+					}
+					$discount = $_POST['discount'] / $a;
+					foreach ($data['stall_number'] as $value) {
+						// echo $value."<br>";
+						$final_data['booking_date'] = $data['booking_date'];
+						$final_data['booked_by'] = $data['booked_by'];
+						$final_data['exhibition_id'] =  $data['exhibition_id'];
+						$final_data['stall_id'] = $data['stall_id'];
+						$final_data['stall_number'] =  $value;
+						$final_data['remark'] = $data['remark'];
+						$final_data['user_id'] = $data['user_id'];
+						$final_data['modeofpayment'] = $data['modeofpayment'];
+						$final_data['price'] = $data['price'] - $discount;
+						$final_data['wallet'] = $wallet;
+
+						// 	print_r($final_data['stall_number']);
+						// 	print_r($final_data);
+
+						$this->Global['account'] = $this->User_model->getdata($data['id']);
+						$this->Global['exhibitions'] = $this->Product_model->get_exhibition_by_id($data['exhibition_id']);
+						$remark = "Stall Number ".$final_data['stall_number']." of ".$this->Global['exhibitions']->name. " has been booked by ".$_SESSION['staffEmail']." for user ".$this->Global['account']->email;
+						$this->Product_model->walletlog($_SESSION['staffEmail'], $remark);
+
+						$this->Admin_model->addbookstalls($final_data);
+						if ($wallet > 0) {
+							$this->Product_model->purchasetranscation($final_data['user_id'], $wallet, $final_data['exhibition_id'], $final_data['stall_number'], "Wallet");
+							$this->Product_model->purchasetranscation($final_data['user_id'], $final_data['price'] - $wallet, $final_data['exhibition_id'], $final_data['stall_number'], $data['modeofpayment']);
+						} else {
+							$this->Product_model->purchasetranscation($final_data['user_id'], $final_data['price'], $final_data['exhibition_id'], $final_data['stall_number'], $data['modeofpayment']);
+						}
+					}
+					// echo $data['user_id'];
+					// echo $data['final_wallet'];
+					$this->Product_model->updatewallet($data['user_id'], $data['final_wallet']);
+					// 	die();
+					// 	$tdata = array();
+					//     			$tdata['user_id'] = $data['user_id'];
+					//     			$tdata['amount'] = $data['wallet_deduction'];
+					//     			$tdata['remark'] = "Purchased Stalls";
+					//     			$tdata['transcation_id'] = $data['user_id'].'PURCHASED'.$data['wallet_deduction'];
+					//     			$this->Product_model->updattranscation($tdata);
+					redirect('staff/profile/' . $data['user_id']);
+					// echo "success";
+					// die();
+					// unset($data["submit"]);
+				}
+				$this->Global['exhibitions'] = $this->Admin_model->offline_exhibition();
+				$query = $this->db->query("Select wallet from users where id = $link");
+				$this->Global['price'] = $query->row_array();
+				// $this->load->model('Product_model');
+				// $this->Global['stalls'] = $this->Product_model->getstalls();
+				$this->Global['user_id'] = $link;
+				$this->load->view('staff/bookstallsforuser', $this->Global);
+			}
+		}
+	}
+
+
+	public function editwallet()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('editwallet', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				$tdata = array();
+				if (isset($_POST['debit'])) {
+					$data = $_POST;
+					$data['wallet'] = $_POST['wallet'];
+					// echo "<pre>";
+					// print_r($data);
+					// die();
+					$this->Product_model->subeditwallet($data['id'], $data['wallet']);
+					$tdata['user_id'] = $data['id'];
+					$tdata['remark'] = $data['remark'];
+					$tdata['modeofpayment'] = 'Wallet';
+					// $tdata['remark'] = 'Money debited in wallet';
+					$tdata['amount'] = $_POST['wallet'];
+					$tdata['transcation_id'] =  $data['id'] . 'DEBIT' . $_POST['wallet'];
+					unset($data['addmoney']);
+					$this->Global['account'] = $this->User_model->getdata($data['id']);
+					$remark = "₹ ".$_POST['wallet']." has been debited from user ".$this->Global['account']['email']." by ".$_SESSION['staffEmail'];
+					$this->Product_model->walletlog($_SESSION['staffEmail'],$remark);
+					$this->Product_model->updattranscation($tdata);
+					redirect($_SERVER['HTTP_REFERER']);
+				}
+				if (isset($_POST['credit'])) {
+					$data = $_POST;
+					$data['wallet'] = $_POST['wallet'];
+					$this->Product_model->addeditwallet($data['id'], $data['wallet']);
+					$tdata['user_id'] = $data['id'];
+					$tdata['remark'] = $data['remark'];
+					$tdata['modeofpayment'] = 'Wallet';
+					// $tdata['remark'] = 'Money credited in wallet';
+					$tdata['amount'] = $_POST['wallet'];
+					$tdata['transcation_id'] =  $data['id'] . 'CREDIT' . $_POST['wallet'];
+					unset($data['addmoney']);
+					$this->Global['account'] = $this->User_model->getdata($data['id']);
+					$remark = "₹ ".$_POST['wallet']." has been credited from user ".$this->Global['account']['email']." by ".$_SESSION['staffEmail'];
+					$this->Product_model->walletlog($_SESSION['staffEmail'],$remark);
+					$this->Product_model->updattranscation($tdata);
+					redirect($_SERVER['HTTP_REFERER']);
+				}
+			}
+		}
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	// staff controller functions
+
+	public function staff()
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			// if(empty($this->session->userdata('isStaffLoggedIn'))){
+			redirect(base_url());
+		}
+		if (!in_array('staff', $this->Global['permissions'])) {
+			$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+			redirect('staff/dashboard');
+		} else {
+			$this->Global['staff'] = $this->Staff_model->getstaff();
+			$this->Global['title'] = "Staff";
+			$this->load->view('staff/staff', $this->Global);
+		}
+	}
+
+	public function editstaff($staff)
+	{
+		if (!isset($_SESSION['isStaffLoggedIn'])) {
+			redirect('staff/login');
+		} else {
+			if (!in_array('editstaff', $this->Global['permissions'])) {
+				$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+				redirect('staff/dashboard');
+			} else {
+				if (isset($_POST['submit'])) {
+					$data = $_POST;
+					unset($data["submit"]);
+					$this->Staff_model->updateStaff($data);
+					$this->session->set_flashdata('success_msg', 'Staff Updated successfully');
+					redirect('staff/staff');
+				}
+				$staffdetails = $this->Staff_model->getstaffuser($staff);
+				$data['roles'] = $this->Staff_model->getroles();
+				$data['staff'] = json_decode(json_encode($staffdetails), true);
+				$this->load->view('staff/edit-staff', $data);
+			}
+		}
+	}
+
+	public function addstaff($param = '')
+	{
+		if (empty($this->session->userdata('isStaffLoggedIn'))) {
+			redirect(base_url());
+		}
+		if (!in_array('addstaff', $this->Global['permissions'])) {
+			$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+			redirect('staff/dashboard');
+		} else {
+			if (isset($_POST['submit'])) {
+				$data = array(
+					'name' => $this->input->post('name'),
+					'role' => $this->input->post('role'),
+					'email' => $this->input->post('email'),
+					'phone' => $this->input->post('phone'),
+					'password' => sha1($this->input->post('password')),
+					'status' => 1
+				);
+				$this->Staff_model->addstaff($data);
+				$this->session->set_flashdata('success_msg', 'New Staff added successfully');
+				redirect(base_url() . 'staff/staff', 'refresh');
+			}
+			$this->Global['roles'] = $this->Staff_model->getroles();
+			$this->load->view('staff/add-staff', $this->Global);
+		}
+	}
+
+	public function changepassword($param = '')
+	{
+		if (empty($this->session->userdata('isStaffLoggedIn'))) {
+			redirect(base_url());
+		}
+		if (!in_array('addstaff', $this->Global['permissions'])) {
+			$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+			redirect('staff/dashboard');
+		} else {
+			if (isset($_POST['password'])) {
+				$this->form_validation->set_rules('password', 'Password', 'trim|required|min_length[4]');
+				$this->form_validation->set_rules('confirmpassword', 'Confirm Password', 'required|matches[password]');
+				if ($this->form_validation->run() == true) {
+					$con = array(
+						'returnType' => 'single',
+						'conditions' => array(
+							'id' => $this->input->post('id'),
+							// 'password' => sha1($this->input->post('oldpassword')),
+						)
+					);
+					$checkLogin = $this->Staff_model->getStaff($con);
+					if ($checkLogin) {
+						$data['id'] = $this->input->post('id');
+						$data['password'] = sha1($this->input->post('password'));
+						$this->Staff_model->updateStaff($data);
+						$this->session->set_flashdata('success_msg', ' Password Changed Successfully.');
+						redirect(base_url() . 'staff/staff', 'refresh');
+					} else {
+						$this->session->set_flashdata('error_msg', ' Wrong password, please try again.');
+					}
+				} else {
+					$this->session->set_flashdata('error_msg', ' Please fill all the mandatory fields.');
+				}
+			}
+			$staff = $this->db->get_where('staff', array('id' => $param))->row_array();
+			$this->Global['staff'] = $staff;
+
+			$this->load->view('staff/changepassword', $this->Global);
+		}
+	}
+
+	public function roles($param = '', $param1 = '', $param2 = '')
+	{
+		if (empty($this->session->userdata('isStaffLoggedIn'))) {
+			redirect(base_url());
+		}
+		if (!in_array('roles', $this->Global['permissions'])) {
+			$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+			redirect('staff/dashboard');
+		} else {
+			$this->Global['roles'] = $this->Staff_model->getroles();
+			$this->Global['title'] = "Roles";
+			$this->load->view('staff/roles', $this->Global);
+		}
+	}
+
+	public function addrole($param = '')
+	{
+		if (empty($this->session->userdata('isStaffLoggedIn'))) {
+			redirect(base_url());
+		}
+		if (!in_array('addrole', $this->Global['permissions'])) {
+			$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+			redirect('staff/dashboard');
+		} else {
+			if (isset($_POST['submit'])) {
+				$title = $_POST['role_name'];
+				$table = "roles";
+				$field = "link";
+				$slug =  $this->create_slug($title, $table, $field);
+				$data = array(
+					'role_name' => $this->input->post('role_name'),
+					'link' => $slug,
+					'status' => 1,
+					'permissions' => implode(',', $this->input->post('permissions')),
+					'date' => date('d-m-Y h:i:s')
+				);
+				$result = $this->Staff_model->addrole($data);
+				if ($result > 0) {
+					$this->session->set_flashdata('success_msg', 'New Role added successfully');
+					redirect(base_url() . 'staff/roles', 'refresh');
+				} else {
+					$this->session->set_flashdata('error_msg', 'Something went wrong, Try again');
+					redirect(base_url() . 'staff/roles', 'refresh');
+				}
+			}
+			$this->Global['allpermissions'] = $this->Staff_model->getallpermissions();
+			$this->load->view('staff/role-add', $this->Global);
+		}
+	}
+
+	public function editrole($param = '')
+	{
+		if (empty($this->session->userdata('isStaffLoggedIn'))) {
+			redirect(base_url());
+		}
+		if (!in_array('editrole', $this->Global['permissions'])) {
+			$this->session->set_flashdata('error_msg', 'You don\'t have permission to access this');
+			redirect('staff/dashboard');
+		} else {
+			if (isset($_POST['submit'])) {
+				$data['link'] = $this->input->post('link');
+				$data['role_name'] = $this->input->post('role_name');
+				if ($this->input->post('permissions') == NULL) {
+					$data['permissions'] = NULL;
+				} else {
+					$data['permissions'] = implode(',', $this->input->post('permissions'));
+				}
+				$this->Staff_model->editrole($data);
+				$this->session->set_flashdata('success_msg', 'Role edited successfully');
+				redirect(base_url() . 'staff/roles', 'refresh');
+			}
+
+			$user_permission = $this->db->get_where('roles', array('link' => $param))->row_array();
+			$this->Global['userpermissions'] = explode(',', $user_permission['permissions']);
+			$this->Global['cat'] = $user_permission;
+			$this->Global['allpermissions'] = $this->Staff_model->getallpermissions();
+			$this->load->view('staff/role-edit', $this->Global);
+		}
+	}
+}

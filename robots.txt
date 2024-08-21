@@ -1,0 +1,5 @@
+User-agent: *
+Sitemap: https://www.gdigitalindia.com/sitemap.xml
+disallow: /old/
+disallow: /blog-detel-a
+disallow: /blog-detel-b
